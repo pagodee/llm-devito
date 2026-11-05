@@ -1,0 +1,102 @@
+# Recipe harness + ollama: UMA imagem com o harness e o Ollama.
+# Rodar a imagem cria UM container com DOIS processos: "ollama serve"
+# (iniciado primeiro, em segundo plano) e o dsh, que fala com ele por HTTP.
+# Os arquivos dos modelos continuam fora da imagem, montados em /models.
+#
+# Construir:  ./build.sh harness-ollama   (dentro de containers/)
+#
+# Esta recipe NÃO depende das imagens harness.sif e ollama.sif: ela parte das
+# mesmas imagens do Docker Hub, então pode ser construída sozinha.
+#
+# É uma recipe de dois estágios. O estágio "harness" instala o dsh como na
+# recipe do harness isolado; o estágio final parte da imagem do Ollama e copia
+# para dentro dela o Node e o dsh já instalados. Só o último estágio vira a
+# imagem; o primeiro é descartado.
+
+# ---------- Estágio 1: instalar o harness ----------
+Bootstrap: docker
+From: {{ NODE_IMAGE }}
+Stage: harness
+
+%post
+    npm install -g @deepseek-ai/dsh@{{ DSH_VERSION }}
+    npm cache clean --force
+
+# ---------- Estágio 2 (final): Ollama + o harness copiado ----------
+Bootstrap: docker
+From: {{ OLLAMA_IMAGE }}
+Stage: final
+
+%labels
+    Project llm-devito
+    Image harness-ollama
+    DshVersion {{ DSH_VERSION }}
+    OllamaImage {{ OLLAMA_IMAGE }}
+
+# Copia o Node e o dsh instalado do estágio 1 para esta imagem
+%files from harness
+    /usr/local/bin/node
+    /usr/local/lib/node_modules
+
+%post
+    # Ver build.sh: em builds no WSL o apt não pode trocar para o usuário "_apt".
+    APT="apt-get -o APT::Sandbox::User=root"
+    $APT update
+    # python3: ferramentas do agente; git: usado pelo dsh;
+    # procps: o comando "ps", para mostrar os processos do container
+    $APT install -y --no-install-recommends python3 git procps
+    rm -rf /var/lib/apt/lists/*
+    # O comando "dsh" que o npm cria é só um atalho para o programa do pacote;
+    # o atalho não veio na cópia, então é recriado aqui
+    ln -sf /usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js /usr/local/bin/dsh
+    mkdir -p /models
+
+# Padrões, como em ollama.def; "apptainer --env" tem prioridade sobre eles.
+%environment
+    export OLLAMA_HOST=127.0.0.1:11434
+    export OLLAMA_MODELS=/models
+    export OLLAMA_CONTEXT_LENGTH=16384
+
+# O que "apptainer run harness-ollama.sif <args>" executa. É sh, não bash.
+%runscript
+    set -e
+    : "${MODEL:?defina MODEL, por exemplo --env MODEL=qwen3:4b}"
+
+    # Se algo já responde no endereço do servidor, o nosso não conseguiria a
+    # porta, e o dsh falaria com o OUTRO servidor sem ninguém perceber. Recusa.
+    if ollama list > /dev/null 2>&1; then
+        echo "[harness-ollama] já existe um servidor em $OLLAMA_HOST; pare-o ou use outra porta" >&2
+        exit 1
+    fi
+
+    # Processo 1: o servidor de modelos, em segundo plano ("&")
+    ollama serve > "$HOME/ollama.log" 2>&1 &
+    OLLAMA_PID=$!
+    # Para o servidor quando este script terminar, seja como for
+    trap 'kill $OLLAMA_PID 2>/dev/null' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+
+    # Espera o servidor responder (até 60 s); desiste antes se ele morrer
+    i=0
+    until ollama list > /dev/null 2>&1; do
+        i=$((i + 1))
+        if ! kill -0 "$OLLAMA_PID" 2>/dev/null || [ "$i" -gt 60 ]; then
+            echo "[harness-ollama] o ollama não iniciou; veja $HOME/ollama.log" >&2
+            exit 1
+        fi
+        sleep 1
+    done
+
+    # Baixa o modelo para /models (a pasta do host) só se ele ainda não existe
+    if ! ollama show "$MODEL" > /dev/null 2>&1; then
+        echo "[harness-ollama] $MODEL ainda não está em /models; baixando"
+        ollama pull "$MODEL"
+    fi
+
+    echo "[harness-ollama] processos dentro deste container:"
+    ps -e -o pid,args
+    echo
+
+    # Processo 2: o harness. Ele encontra o servidor no endereço de OLLAMA_HOST.
+    dsh "$@"

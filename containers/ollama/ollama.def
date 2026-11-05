@@ -1,0 +1,34 @@
+# Recipe do ollama isolado: só o servidor de modelos.
+# Os arquivos dos modelos NÃO ficam na imagem. Na execução, uma pasta do host
+# é montada em /models e o Ollama lê os modelos de lá.
+#
+# Construir:  ./build.sh ollama   (dentro de containers/)
+
+# A imagem oficial já traz os arquivos do Ubuntu, o programa ollama e as
+# bibliotecas CUDA (para GPUs NVIDIA). Esta recipe só ajusta configurações.
+Bootstrap: docker
+From: {{ OLLAMA_IMAGE }}
+
+%labels
+    Project llm-devito
+    Image ollama
+    OllamaImage {{ OLLAMA_IMAGE }}
+
+%post
+    # Ponto de montagem vazio para a pasta de modelos do host
+    mkdir -p /models
+
+# Variáveis definidas toda vez que o container inicia. São só PADRÕES: um
+# valor passado com "apptainer --env" tem prioridade, e é assim que os
+# scripts de execução escolhem a porta e o contexto.
+%environment
+    # Escutar só nesta máquina. A imagem oficial usa 0.0.0.0, o que exporia o
+    # servidor de modelos para a rede inteira.
+    export OLLAMA_HOST=127.0.0.1:11434
+    # Onde o Ollama procura os modelos: a pasta montada do host
+    export OLLAMA_MODELS=/models
+    # Tamanho do contexto, em tokens, com que os modelos são carregados
+    export OLLAMA_CONTEXT_LENGTH=16384
+
+%runscript
+    exec ollama serve "$@"

@@ -1,0 +1,38 @@
+# Recipe do harness isolado: Node 24 + DeepSeek Harness (dsh), e nada mais.
+# O modelo NÃO está aqui. Ele é servido por outro processo, fora deste
+# container (o Ollama do seu computador, o container do ollama isolado ou
+# outra máquina), e o dsh fala com ele por HTTP.
+#
+# Construir:  ./build.sh harness   (dentro de containers/)
+# Os {{ NOMES }} são preenchidos pelo build.sh com os valores de versions.env.
+
+# Ponto de partida: uma imagem pronta do Docker Hub. São só os ARQUIVOS de uma
+# distribuição (shell, apt, bibliotecas) com o Node já instalado. Não há kernel
+# nem boot: quem executa tudo é o kernel da máquina onde o container roda.
+Bootstrap: docker
+From: {{ NODE_IMAGE }}
+
+%labels
+    Project llm-devito
+    Image harness
+    DshVersion {{ DSH_VERSION }}
+
+# Roda UMA vez, durante o build, dentro da imagem que está sendo montada.
+%post
+    # Ver build.sh: em builds no WSL o apt não pode trocar para o usuário "_apt".
+    APT="apt-get -o APT::Sandbox::User=root"
+    $APT update
+    # python3: as ferramentas do agente (servidores MCP em agent/) são Python
+    # ca-certificates: certificados para conexões HTTPS (npm, git)
+    # git: o dsh o usa para acompanhar mudanças no diretório de trabalho
+    $APT install -y --no-install-recommends python3 ca-certificates git
+    # O catálogo de pacotes não serve mais depois da instalação: menos espaço
+    rm -rf /var/lib/apt/lists/*
+
+    npm install -g @deepseek-ai/dsh@{{ DSH_VERSION }}
+    npm cache clean --force
+
+# O que "apptainer run harness.sif <args>" executa: os args vão para o dsh.
+# O "exec" faz o dsh substituir o shell, então o Ctrl+C chega direto nele.
+%runscript
+    exec dsh "$@"
