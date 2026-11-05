@@ -6,7 +6,7 @@ faria, e confere a física. Roda em segundos.
 
 Ou dentro da imagem, com o mesmo Python que o agente usa:
 
-    apptainer exec --containall --bind agent:/agent:ro containers/images/harness.sif \\
+    apptainer exec --containall --bind agent:/agent:ro llm-devito.sif \\
         python3 /agent/test_projectile_server.py
 """
 import json

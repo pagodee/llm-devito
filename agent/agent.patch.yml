@@ -1,0 +1,65 @@
+# Configuração do agente, aplicada sobre o perfil "web" do dsh com --patch.
+# O modelo e o contexto vêm das variáveis MODEL e CONTEXT_LENGTH, definidas
+# pelo script serve-<modelo>.sh.
+
+# 1. O modelo: o Ollama do próprio container, pela API compatível com a OpenAI
+- id: llm-pi-ai
+  name: '@deepseek-ai/dsh-llm-pi-ai'
+  config:
+    providers:
+      ollama:
+        displayName: Ollama
+        api: openai-completions
+        baseURL: http://127.0.0.1:11434/v1
+        apiKeyEnv: GPT_API_KEY
+        models:
+          - id: !!js process.env.MODEL
+            name: !!js process.env.MODEL
+            # Igual ao contexto do Ollama; senão o dsh suporia o máximo do modelo
+            contextWindow: !!js Number(process.env.CONTEXT_LENGTH)
+
+- id: agent-default-model
+  name: '@deepseek-ai/dsh-agent-default-model'
+  config:
+    provider: ollama
+    model: !!js process.env.MODEL
+
+# 2. Sem título automático da sessão (uma chamada extra e lenta ao modelo)
+- { id: session-title-llm, disabled: true }
+
+# 3. O agente "Física", padrão nas sessões novas: só a ferramenta de projéteis,
+#    sem terminal nem arquivos. Os agentes normais do dsh continuam no seletor.
+- id: agent-preset-registry
+  config:
+    default: physics
+
+- insert:
+    - id: preset-physics
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: physics
+        name: Física
+        description: Simula lançamento de projéteis com e sem resistência do ar.
+        order: 0
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: >-
+                You are a physics assistant for an undergraduate research
+                project on modelling physical phenomena, powered by the
+                {{model}} model. Answer quantitative questions about projectile
+                motion by running numerical experiments with the
+                simulate_projectile tool; never estimate numbers by hand when
+                the tool can compute them. In every answer state the model
+                equation, the parameters you used, the numbers the tool
+                returned, the integrator check, and a short physical
+                interpretation. Answer in the language the user writes in.
+          - id: mcp-physics
+            name: '@deepseek-ai/dsh-mcp-client'
+            config:
+              serverName: physics
+              transport: stdio
+              command: /usr/bin/python3
+              args: [/agent/projectile_server.py]
+              failOnStartupError: true

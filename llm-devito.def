@@ -1,0 +1,42 @@
+# Recipe da imagem llm-devito: Ollama (servidor de modelos) + DeepSeek Harness
+# (agente, com interface web) + as dependências dos dois.
+#
+# Versões fixas:
+#   Ollama            0.40.13   (a imagem base, sobre Ubuntu 24.04)
+#   Node.js           24.22.2   (o dsh exige >= 24.9)
+#   DeepSeek Harness  0.2.1-rc.2
+#   Python            3 do Ubuntu 24.04 (para as ferramentas do agente)
+#
+# Construir: ./scripts/build.sh
+# Rodar:     ./scripts/serve-<modelo>.sh
+
+Bootstrap: docker
+From: ollama/ollama:0.40.13
+
+%labels
+    ollama 0.40.13
+    node 24.22.2
+    dsh 0.2.1-rc.2
+
+%post
+    apt-get update
+    apt-get install -y --no-install-recommends ca-certificates curl xz-utils python3 git
+    rm -rf /var/lib/apt/lists/*
+    curl -fsSL https://nodejs.org/dist/v24.22.2/node-v24.22.2-linux-x64.tar.xz \
+        | tar -xJ -C /usr/local --strip-components=1 --no-same-owner
+    npm install -g @deepseek-ai/dsh@0.2.1-rc.2
+    npm cache clean --force
+
+%environment
+    export OLLAMA_HOST=127.0.0.1:11434
+    export OLLAMA_MODELS=/models
+
+# Os dois processos do container:
+#   1. ollama serve, em segundo plano
+#   2. dsh web, a interface do agente em http://127.0.0.1:3080
+# Antes de abrir a interface, baixa o modelo $MODEL se ele não estiver em /models.
+%runscript
+    ollama serve > "$HOME/ollama.log" 2>&1 &
+    until ollama list > /dev/null 2>&1; do sleep 1; done
+    ollama show "$MODEL" > /dev/null 2>&1 || ollama pull "$MODEL"
+    dsh web --no-open --patch /agent/agent.patch.yml

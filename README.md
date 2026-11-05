@@ -21,64 +21,62 @@ própria resposta contra casos com solução conhecida.
 
 ## Componentes
 
-| Peça                                                                | O que faz                                                                             | Por quê                                              |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) | O *harness* do agente: conversa com o modelo, chama as ferramentas, guarda as sessões | Para incluir ferramentas como servidores MCP         |
-| [Ollama](https://ollama.com/)                                       | Servidor de modelos                                                                   | Permitir o uso de diferentes modelos com troca fácil |
-| [Apptainer](https://apptainer.org/)                                 | Containers                                                                            | Garantir a padronização do projeto                   |
+| Peça                                                                | O que faz                                                                             |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) | O *harness* do agente: conversa com o modelo, chama as ferramentas, interface web     |
+| [Ollama](https://ollama.com/)                                       | Servidor de modelos                                                                   |
+| [Apptainer](https://apptainer.org/)                                 | Container: uma imagem com tudo, a mesma no computador e no cluster                    |
 
+Uma única imagem (`llm-devito.def`) traz o Ollama e o harness. Ao rodar, o container tem
+dois processos: o `ollama serve` e o `dsh web`, a interface do agente no navegador. Os
+modelos ficam **fora** da imagem, em `~/ollama-models`.
 
-## Status
+## Uso
 
-| Etapa                              | Situação                          |
-| ---------------------------------- | --------------------------------- |
-| Imagens de container               | Construídas e Validadas           |
-| Teste de Agente com uma ferramenta | Chegou no resultado esperado      |
-| Execução no cluster com GPU        | ⏳ modelado, mas ainda não testado |
-| Ferramentas com Devito (EDPs)      | ⏳ ainda não implementado          |
-| Pipeline completo                  | ⏳ ainda não implementado          |
-
-## As três variações de container
-
-São **alternativas independentes**, não etapas: cada uma é construída e roda sozinha.
-
-| Variante         | Conteúdo da imagem                    | Quando usar                                                          |
-| ---------------- | ------------------------------------- | -------------------------------------------------------------------- |
-| `harness-ollama` | harness + servidor de modelos, juntos | **O uso normal.** Um arquivo, um comando; é a forma usada no cluster |
-| `harness`        | só o harness                          | Quando o modelo já é servido em outra máquina                        |
-| `ollama`         | só o servidor de modelos              | Para baixar modelos ou servir um modelo para vários clientes         |
-
-Em todas, os arquivos dos modelos ficam **fora** da imagem, numa pasta do host.
-
-## Início rápido
-
-Num Linux x86-64 (ou WSL2) com Apptainer instalado:
+Num Linux x86-64 com Apptainer instalado (ver [docs/setup.md](docs/setup.md)):
 
 ```bash
 git clone https://github.com/pagodee/llm-devito.git
-cd llm-devito/containers
-./build.sh harness-ollama          # ~3,4 GB; só na primeira vez
-./harness-ollama/run.sh "Uma bola de futebol (0,43 kg, 22 cm de diâmetro) é chutada a 30 m/s com ângulo de 45 graus. Quanto o alcance diminui por causa da resistência do ar?"
+cd llm-devito
+./scripts/build.sh               # constrói llm-devito.sif (~3,5 GB), só na primeira vez
+./scripts/serve-qwen3-4b.sh      # sobe o Ollama com o qwen3:4b + a interface web
 ```
 
-Na primeira execução o modelo padrão (`qwen3:4b`, ~2,5 GB) é baixado para `~/ollama-models`.
-O agente chama a ferramenta `simulate_projectile`, que realiza a simulação do lançamento do projétil considerando a resistência do ar e considerando o vácuo, e responde que o alcance cai de ~91,7 m no vácuo para ~36,8 m com arrasto, cerca de 60 % a menos. 
+Abra **http://127.0.0.1:3080** no navegador. `Ctrl+C` no terminal desliga tudo.
 
-Instalação do Apptainer, as outras variantes, configuração e uso no cluster:
-**[docs/setup.md](docs/setup.md)**.
+Se o modelo ainda não estiver em `~/ollama-models`, ele é baixado na primeira vez. Para outro
+modelo, use outro script (`./scripts/serve-gpt-oss-20b.sh`) ou crie um copiando um dos
+existentes.
 
-## Estrutura do repositório
+A sessão nova abre com o agente **Física**, que tem uma única ferramenta,
+`simulate_projectile`. Pergunta de teste:
 
-| Caminho                                     | Conteúdo                                                                        |
-| ------------------------------------------- | ------------------------------------------------------------------------------- |
-| `containers/versions.env`                   | Versões de Node, dsh e Ollama usadas nas imagens                                |
-| `containers/build.sh`                       | Constrói as imagens a partir das recipes                                        |
-| `containers/common.sh`                      | Configuração compartilhada dos scripts de execução (modelo, porta, pastas, GPU) |
-| `containers/harness-ollama/`                | Recipe, script de execução e modelo de job SLURM da variante completa           |
-| `containers/harness/`, `containers/ollama/` | Recipes e scripts das variantes separadas                                       |
-| `agent/`                                    | O agente de teste: configuração do dsh e a ferramenta para teste inicial        |
-| `scripts/install-apptainer.sh`              | Instala o Apptainer em Ubuntu/Debian                                            |
-| `docs/setup.md`                             | Guia de instalação e uso                                                        |
+> Uma bola de futebol (0,43 kg, 22 cm de diâmetro) é chutada a 30 m/s com ângulo de 45 graus.
+> Quanto o alcance diminui por causa da resistência do ar?
+
+Resposta esperada: ~36,8 m com arrasto contra ~91,7 m no vácuo, cerca de 60 % a menos.
+
+## Estrutura
+
+| Caminho                        | Conteúdo                                                        |
+| ------------------------------ | --------------------------------------------------------------- |
+| `llm-devito.def`               | A recipe da imagem, com as versões fixas                        |
+| `scripts/build.sh`             | Constrói a imagem                                               |
+| `scripts/serve-<modelo>.sh`    | Serve um modelo específico (um script por modelo)               |
+| `scripts/serve.sh`             | O comando `apptainer run` comum, chamado pelos scripts de modelo |
+| `scripts/install-apptainer.sh` | Instala o Apptainer em Ubuntu/Debian                            |
+| `agent/`                       | O agente de teste: configuração do dsh e a ferramenta MCP       |
+| `docs/setup.md`                | Instalação e detalhes                                           |
+
+## Status
+
+| Etapa                              | Situação                           |
+| ---------------------------------- | ---------------------------------- |
+| Imagem (Ollama + harness)          | Construída                         |
+| Agente com uma ferramenta, via web | Testado                            |
+| Execução no cluster com GPU        | ⏳ ainda não testado                |
+| Ferramentas com Devito (EDPs)      | ⏳ ainda não implementado           |
+| Pipeline completo                  | ⏳ ainda não implementado           |
 
 ## Licença
 

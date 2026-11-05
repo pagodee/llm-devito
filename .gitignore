@@ -1,15 +1,9 @@
-# Imagens construídas (centenas de MB a alguns GB): são reconstruídas a partir
-# das recipes com containers/build.sh
-containers/images/
+# A imagem construída (~3,5 GB): é refeita com scripts/build.sh
 *.sif
 
-# Homes dos containers: sessões do dsh (conversas), logs, a chave de
-# identidade que o Ollama gera (.ollama/id_ed25519) e configurações geradas
-containers/state/
-
-# Saída dos jobs SLURM (containers/harness-ollama/slurm-job.sh): contém a
-# conversa inteira do agente
-llm-devito-*.log
+# Home do container: sessões do agente (conversas), log do Ollama e a chave
+# de identidade que o Ollama gera (.ollama/id_ed25519)
+state/
 
 # Python
 __pycache__/
