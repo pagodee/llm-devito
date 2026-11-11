@@ -41,10 +41,11 @@ Node e dsh estão escritas em `llm-devito.def`; para conferir as de uma imagem j
 ./scripts/serve-qwen3-4b.sh
 ```
 
-O container sobe com dois processos:
+O script sobe dois processos, os dois a partir da mesma imagem:
 
 1. `ollama serve`, o servidor de modelos, em `127.0.0.1:11434` (log em `state/ollama.log`);
-2. `dsh web`, a interface do agente, em **http://127.0.0.1:3080**.
+2. `dsh web`, a interface do agente, em **http://127.0.0.1:3080**. Abra o link com `?token=`
+   que o dsh mostra no terminal.
 
 Antes de abrir a interface ele confere se o modelo está em `~/ollama-models` e, se não
 estiver, baixa. `Ctrl+C` desliga os dois.
@@ -89,7 +90,7 @@ Esperado: `15/15 verificações passaram`.
 | ----------------- | ------------ | ---------------------------------------------- |
 | `~/ollama-models` | `/models`    | Os modelos (GBs)                               |
 | `agent/`          | `/agent`     | Configuração e ferramenta, somente leitura     |
-| `state/`          | `/home/dsh`  | Sessões do agente, log do Ollama               |
+| `state/`          | `/home/dsh`  | Sessões e pasta de trabalho do agente, log do Ollama |
 
 O `--containall` isola o container da sua home e das suas variáveis de ambiente (o
 [SAFETY.md do dsh](https://github.com/deepseek-ai/deepseek-harness) recomenda isolamento).
@@ -101,4 +102,5 @@ navegador do host acessa a interface.
 | Sintoma                                        | Causa                                                                                                   |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | O agente usa um modelo/servidor inesperado     | Já existe um Ollama na porta 11434 (por exemplo, instalado no sistema). Pare-o: `sudo systemctl stop ollama` |
+| Interface responde 401 / não autorizado        | Falta o token: abra o link completo (`?token=...`) que o dsh mostra no terminal |
 | Interface não abre em 127.0.0.1:3080           | A porta 3080 está ocupada por outro programa, ou o container ainda está baixando o modelo               |

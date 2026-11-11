@@ -27,8 +27,9 @@ própria resposta contra casos com solução conhecida.
 | [Ollama](https://ollama.com/)                                       | Servidor de modelos                                                                   |
 | [Apptainer](https://apptainer.org/)                                 | Container: uma imagem com tudo, a mesma no computador e no cluster                    |
 
-Uma única imagem (`llm-devito.def`) traz o Ollama e o harness. Ao rodar, o container tem
-dois processos: o `ollama serve` e o `dsh web`, a interface do agente no navegador. Os
+Uma única imagem (`llm-devito.def`) traz o Ollama e o harness: só o software instalado,
+sem lógica. Os scripts em `scripts/` decidem o que rodar: o `serve.sh` usa a imagem para
+dois processos, o `ollama serve` e o `dsh web`, a interface do agente no navegador. Os
 modelos ficam **fora** da imagem, em `~/ollama-models`.
 
 ## Uso
@@ -42,7 +43,8 @@ cd llm-devito
 ./scripts/serve-qwen3-4b.sh      # sobe o Ollama com o qwen3:4b + a interface web
 ```
 
-Abra **http://127.0.0.1:3080** no navegador. `Ctrl+C` no terminal desliga tudo.
+Abra no navegador o link que aparece no terminal (`http://127.0.0.1:3080/?token=...`; sem o
+token a interface recusa o acesso). `Ctrl+C` no terminal desliga tudo.
 
 Se o modelo ainda não estiver em `~/ollama-models`, ele é baixado na primeira vez. Para outro
 modelo, use outro script (`./scripts/serve-gpt-oss-20b.sh`) ou crie um copiando um dos
@@ -60,10 +62,10 @@ Resposta esperada: ~36,8 m com arrasto contra ~91,7 m no vácuo, cerca de 60 % a
 
 | Caminho                        | Conteúdo                                                        |
 | ------------------------------ | --------------------------------------------------------------- |
-| `llm-devito.def`               | A recipe da imagem, com as versões fixas                        |
+| `llm-devito.def`               | A recipe da imagem: só o software, com as versões fixas         |
 | `scripts/build.sh`             | Constrói a imagem                                               |
 | `scripts/serve-<modelo>.sh`    | Serve um modelo específico (um script por modelo)               |
-| `scripts/serve.sh`             | O comando `apptainer run` comum, chamado pelos scripts de modelo |
+| `scripts/serve.sh`             | Os passos comuns (Ollama, modelo, interface), chamado pelos scripts de modelo |
 | `scripts/install-apptainer.sh` | Instala o Apptainer em Ubuntu/Debian                            |
 | `agent/`                       | O agente de teste: configuração do dsh e a ferramenta MCP       |
 | `docs/setup.md`                | Instalação e detalhes                                           |

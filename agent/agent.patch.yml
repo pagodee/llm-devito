@@ -63,3 +63,10 @@
               command: /usr/bin/python3
               args: [/agent/projectile_server.py]
               failOnStartupError: true
+
+# 4. A pasta de trabalho das sessões. O dsh a cria dentro da pasta Documentos do
+#    sistema, que não existe no container; assim ela fica na home do container:
+#    state/deepseek-harness/default-workspace no host.
+- id: workspace-controller
+  config:
+    documentsDirectory: /home/dsh
